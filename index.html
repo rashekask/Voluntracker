@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Voluntracker (React + Firebase)</title>
+  <style>
+    :root { --bg:#0b132b; --card:#1c2541; --accent:#5bc0be; --text:#e6e6e6; --muted:#94a3b8; }
+    body { margin:0; font-family:ui-sans-serif,system-ui; background:var(--bg); color:var(--text); display:grid; place-items:center; min-height:100dvh; }
+    .card { width:min(480px, 92vw); background:var(--card); border-radius:16px; padding:24px; box-shadow:0 8px 24px rgba(0,0,0,.35); }
+    h1 { margin:0 0 8px; font-size:22px; }
+    .muted { color:var(--muted); font-size:14px; margin-top:0; }
+    input { width:100%; padding:12px; border-radius:10px; border:1px solid #2d3a6b; background:#111827; color:var(--text); margin:8px 0; }
+    button { padding:10px 14px; border-radius:10px; border:none; background:var(--accent); color:#001217; font-weight:600; cursor:pointer; }
+    button.secondary { background:#334155; color:#e2e8f0; }
+    .row { display:flex; gap:10px; align-items:center; }
+    .spread { display:flex; justify-content:space-between; align-items:center; }
+    .center { text-align:center; }
+    .hours { font-size:48px; font-weight:800; letter-spacing:1px; margin:12px 0 16px; }
+    .error { color:#ff8080; font-size:13px; min-height:16px; }
+    .footer { margin-top:16px; font-size:12px; color:var(--muted); text-align:center; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React 18 (UMD) -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Firebase (ESM) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import {
+      getAuth, setPersistence, browserLocalPersistence,
+      onAuthStateChanged, signInWithEmailAndPassword,
+      createUserWithEmailAndPassword, signOut
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import {
+      getFirestore, doc, getDoc, setDoc, onSnapshot,
+      updateDoc, increment, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    //paste
+    const firebaseConfig = {
+       apiKey: "AIzaSyAqF6Ps8PZ-P0iF3JGrycVtBYwIETBYe_U",
+  	authDomain: "voluntracker-37960.firebaseapp.com",
+  	projectId: "voluntracker-37960",
+  	storageBucket: "voluntracker-37960.firebasestorage.app",
+  	messagingSenderId: "882313290014",
+  	appId: "1:882313290014:web:be223f5fd822aeac78290f",
+  	measurementId: "G-8T5Z29Q16S"
+
+    };
+
+    // Init Firebase
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    await setPersistence(auth, browserLocalPersistence); // remember me automatically
+
+    // Tiny helpers
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const { useState, useEffect, useRef } = React;
+
+    function AuthCard({ onDone }) {
+      const [email, setEmail] = useState("");
+      const [pass, setPass] = useState("");
+      const [mode, setMode] = useState("login"); // 'login' | 'register'
+      const [err, setErr] = useState("");
+
+      const submit = async () => {
+        setErr("");
+        try {
+          if (mode === "login") {
+            await signInWithEmailAndPassword(auth, email.trim(), pass);
+          } else {
+            const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
+            // create initial Firestore doc
+            const ref = doc(db, "users", cred.user.uid, "profile", "profile");
+            await setDoc(ref, { totalHours: 0, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+          }
+          onDone();
+        } catch (e) {
+          setErr(e.message || "Something went wrong");
+        }
+      };
+
+      return (
+        React.createElement("div", { className:"card" },
+          React.createElement("h1", null, "Voluntracker"),
+          React.createElement("p", { className:"muted" }, "Log and track volunteer hours. Fast, secure, and simple"),
+          React.createElement("input", { placeholder:"Email", value:email, onChange:e=>setEmail(e.target.value) }),
+          React.createElement("input", { placeholder:"Password", type:"password", value:pass, onChange:e=>setPass(e.target.value) }),
+          React.createElement("div", { className:"error" }, err),
+          React.createElement("div", { className:"row" },
+            React.createElement("button", { onClick:submit }, mode === "login" ? "Sign In" : "Create Account"),
+            React.createElement("button", { className:"secondary", onClick:()=>setMode(mode==="login"?"register":"login") },
+              mode === "login" ? "Need an account?" : "Have an account?")
+          ),
+          React.createElement("div", { className:"footer" }, "Built by Rasheka Senthil Kumar")
+        )
+      );
+    }
+
+    function Dashboard({ user }) {
+      const [hours, setHours] = useState(0);
+      const [loading, setLoading] = useState(true);
+      const [err, setErr] = useState("");
+      const customRef = useRef();
+
+      // subscribe to this user's profile doc
+      useEffect(() => {
+        const ref = doc(db, "users", user.uid, "profile", "profile");
+        // ensure doc exists
+        (async () => {
+          const snap = await getDoc(ref);
+          if (!snap.exists()) {
+            await setDoc(ref, { totalHours: 0, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+          }
+        })();
+        const unsub = onSnapshot(ref, (snap) => {
+          const data = snap.data() || { totalHours: 0 };
+          setHours(Number(data.totalHours || 0));
+          setLoading(false);
+        });
+        return () => unsub();
+      }, [user.uid]);
+
+      const bump = async (delta) => {
+        setErr("");
+        try {
+          const ref = doc(db, "users", user.uid, "profile", "profile");
+          await updateDoc(ref, { totalHours: increment(delta), updatedAt: serverTimestamp() });
+        } catch (e) {
+          setErr(e.message || "Update failed");
+        }
+      };
+
+      const setCustom = async () => {
+        const v = parseFloat(customRef.current?.value || "0");
+        if (isNaN(v)) return;
+        setErr("");
+        try {
+          const ref = doc(db, "users", user.uid, "profile", "profile");
+          // set to exact number by writing it directly
+          await setDoc(ref, { totalHours: v, updatedAt: serverTimestamp() }, { merge: true });
+          customRef.current.value = "";
+        } catch (e) {
+          setErr(e.message || "Update failed");
+        }
+      };
+
+      return (
+        React.createElement("div", { className:"card" },
+          React.createElement("div", { className:"spread" },
+            React.createElement("h1", null, "My Hours"),
+            React.createElement("button", { className:"secondary", onClick:()=>signOut(auth) }, "Sign Out")
+          ),
+          loading
+            ? React.createElement("p", { className:"muted" }, "Loading…")
+            : React.createElement("div", { className:"center" },
+                React.createElement("div", { className:"hours" }, hours.toFixed(1).replace(/\.0$/, "")),
+                React.createElement("div", { className:"row", style:{justifyContent:'center'} },
+                  React.createElement("button", { onClick:()=>bump(-1) }, "–1"),
+                  React.createElement("button", { onClick:()=>bump(+1) }, "+1")
+                ),
+                React.createElement("div", { className:"row", style:{marginTop:'12px'} },
+                  React.createElement("input", { ref:customRef, placeholder:"Set to exact number (e.g., 12.5)" }),
+                  React.createElement("button", { onClick:setCustom }, "Set")
+                ),
+                React.createElement("div", { className:"error", style:{marginTop:'8px'} }, err)
+              ),
+          React.createElement("p", { className:"footer" }, `Signed in as ${user.email}`)
+        )
+      );
+    }
+
+    function App() {
+      const [user, setUser] = useState(null);
+      const [ready, setReady] = useState(false);
+
+      useEffect(() => {
+        const unsub = onAuthStateChanged(auth, async (u) => {
+          setUser(u || null);
+          if (!ready) await sleep(50);
+          setReady(true);
+        });
+        return () => unsub();
+      }, []);
+
+      if (!ready) return React.createElement("p", { className:"muted" }, "Starting…");
+      return user
+        ? React.createElement(Dashboard, { user })
+        : React.createElement(AuthCard, { onDone:()=>{} });
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(React.createElement(App));
+  </script>
+</body>
+</html>
