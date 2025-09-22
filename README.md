@@ -7,7 +7,7 @@ A **single-page** web app to log volunteer hours with **Firebase Auth (email/pas
 
 ---
 
-## ✨ Features
+##  Features
 
 - Email/password **login & register** (Firebase Auth)
 - Per-user total hours in **Firestore** (`users/{uid}/profile/profile`)
@@ -17,7 +17,7 @@ A **single-page** web app to log volunteer hours with **Firebase Auth (email/pas
 
 ---
 
-## 🗂 Project Structure
+##  Project Structure
 voluntracker-web/
 ├─ index.html          # the whole app (React + Firebase via CDN)
 ├─ README.md
