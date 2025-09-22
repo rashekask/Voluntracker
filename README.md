@@ -17,12 +17,13 @@ A **single-page** web app to log volunteer hours with **Firebase Auth (email/pas
 
 ---
 
-##  Project Structure
-voluntracker-web/
-   index.html          # the whole app (React + Firebase via CDN)
-   README.md
-   .github/
-       workflows/
-       azure-static-web-apps-<something>.yml  # added by Azure for CI/CD
+## Project Structure
+
+- **index.html** — Single-page app (React via CDN + Firebase Auth/Firestore)
+- **README.md** — This file
+- **.github/**
+  - **workflows/**
+    - **azure-static-web-apps-<id>.yml** — CI/CD workflow auto-created by Azure
+
 
 Azure URL: https://witty-bay-0a7a6550f.1.azurestaticapps.net 
